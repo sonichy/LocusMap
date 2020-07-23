@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<meta name="viewport" content="initial-scale=1.0, user-scalable=no">
+<style>
+body, html { width:100%; height:100%; margin:0; }
+#allmap { height:100%; width:100%; }
+#gpxlist { position:absolute; left:70px; top:5px; }
+#debug { position:absolute; left:80px; top:30px; }
+#copyright { position:absolute; right:0; bottom:0; }
+</style>
+<script src="http://api.map.baidu.com/api?v=3.0&ak=BNkUySO57K2gqmzKWdsyIOCk"></script>
+<script src="http://api.map.baidu.com/library/TextIconOverlay/1.2/src/TextIconOverlay_min.js"></script>
+<script src="http://api.map.baidu.com/library/MarkerClusterer/1.2/src/MarkerClusterer_min.js"></script>
+<title>轨迹地图</title>
+</head>
+<body>
+<div id="allmap"></div>
+<div id="gpxlist">
+<select id="select1" onchange="loadLocus()">
+<option>20200712095228UC.gpx</option>
+<option>m20200712095228UC.gpx</option>
+<option>20200712090119UC.gpx</option>
+<option>20190706072349UC.gpx</option>
+<option>20190515091138UC.gpx</option>
+<option>20190515134402UC.gpx</option>
+<option>2014-08-13_20-28-03.gpx</option>
+<option>2014-08-13_20-40-25.gpx</option>
+<option>2014-08-16_17-41-14.gpx</option>
+<option>2014-08-20_10-52-03.gpx</option>
+<option>2014-08-30_19-04-33.gpx</option>
+<option>20141127170203.gpx</option>
+<option>20160903091403.gpx</option>
+<option>20180610084245.gpx</option>
+</select>
+</div>
+<div id="debug">
+<input id="btnfb" type="button" value="<<">
+<input id="btnb" type="button" value="<">
+<input id="btnpause" type="button" value="||">
+<input id="btnf" type="button" value=">">
+<input id="btnff" type="button" value=">>"><br>
+<label id="longitude">经度:</label><br>
+<label id="latitude">纬度:</label><br>
+<label id="time">时间:</label><br>
+<button id="button_delete">删除</button> 
+<label id="pid"></label><br>
+删除 <label id="points_delete"></label> <button id="button_saveas">另存为</button> 
+</div>
+<div id="copyright">© 2009-2020 海天鹰版权所有</div>
+<script>
+function $id(s) { return document.getElementById(s); }
+
+// 百度地图API功能
+var map = new BMap.Map("allmap");
+var navigation = new BMap.NavigationControl();		//平移、缩放控件
+map.addControl(navigation);
+var mapType = new BMap.MapTypeControl({ anchor: BMAP_ANCHOR_TOP_RIGHT });	//地图，卫星，三维
+map.addControl(mapType);
+//map.setCurrentCity("北京"); 	//三维图，需要设置城市
+var scale_control = new BMap.ScaleControl({ anchor: BMAP_ANCHOR_BOTTOM_LEFT });	// 添加比例尺
+map.addControl(scale_control); 
+map.enableScrollWheelZoom();    //启用滚轮放大缩小，默认禁用
+map.enableContinuousZoom();     //启用地图惯性拖拽，默认禁用
+	
+var xmlDoc, trkpt;
+var filename = document.all.select1.options[0].text;
+var pl = 0;
+var points = [], times = [];    //markers = [];
+var marker3;
+var labela;
+var polyline;
+//动画
+var i1=0, itv1, itv2, delurl;
+
+function loadGPX(filename){
+	map.clearOverlays();
+	// code for IE
+	try {
+		xmlDoc = new ActiveXObject("Microsoft.XMLDOM");
+	} catch (e) {	// code for Firefox.
+		try {
+			xmlDoc = document.implementation.createDocument("","",null);
+		} catch(e) {
+			alert(e.message)
+		}
+	}
+	try {
+		xmlDoc.async = false;
+		xmlDoc.load(filename);
+	} catch(e) { // code for Opera,Chrome. Server only!
+		var xmlhttp = new window.XMLHttpRequest();
+		xmlhttp.open("GET", filename, false);
+		xmlhttp.overrideMimeType("text/xml");
+		xmlhttp.send(null);
+		xmlDoc = xmlhttp.responseXML.documentElement;
+	}
+
+	//构建点集合
+	trkpt = xmlDoc.getElementsByTagName('trkpt');
+	pl = trkpt.length;
+	points = [];	
+	times = [];
+	//markers = [];
+	for(var i=0; i<pl; i++){
+		points[i] = new BMap.Point(trkpt[i].getAttribute('lon'), trkpt[i].getAttribute('lat'));
+		//ids[i] = i;
+		times.push(trkpt[i].getElementsByTagName('time')[0].textContent);
+		//markers.push(new BMap.Marker(points[i]));//点聚合
+	}
+	
+	map.centerAndZoom(points[parseInt(pl/2)], 17);	//使用点聚合前必须先centerAndZoom，否则报错 Cannot read property 'lng' of null	
+	//var markerClusterer = new BMapLib.MarkerClusterer(map, { markers: markers }); //点聚合，放大大量点卡顿
+
+	//把点集合连成线
+	polyline = new BMap.Polyline(points, { strokeColor: "blue", strokeWeight: 2, strokeOpacity: 0.8 });
+	//polyline.enableEditing();	//开启编辑，卡死
+	polyline.addEventListener("click", function(e){		
+		var point = new BMap.Point(e.point.lng, e.point.lat);
+		//遍历计算距离获取最近的点
+		var min = 100;
+		var j = 0;
+		for (i=0; i<points.length; i++) {
+			dis = map.getDistance(point, points[i]);
+			if (dis < min){
+				min = dis;
+				j = i;
+			}
+		}
+		labela.setContent(j);
+		labela.setTitle(j);
+		marker3.setPosition(points[j]);
+		$id('pid').innerHTML = j;
+		$id('longitude').innerHTML = "经度：" + points[j].lng;
+		$id('latitude').innerHTML = "纬度：" + points[j].lat;
+		$id('time').innerHTML = "时间：" + times[j];
+		i1 = j;
+    });
+	map.addOverlay(polyline);
+ 
+	// 创建起点标注
+	var icon = new BMap.Icon("start.png", new BMap.Size(34, 34));
+	var marker = new BMap.Marker(points[0], { icon: icon, offset: new BMap.Size(2, -15) });
+	map.addOverlay(marker);
+	
+	// 创建终点标注
+	var icon = new BMap.Icon("end.png", new BMap.Size(34, 34));
+	var marker = new BMap.Marker(points[pl-1], { icon: icon, offset: new BMap.Size(2, -15) });
+	map.addOverlay(marker);
+
+	// 设置文字标签样式
+	var ls = { color : "white", fontSize : "12px", backgroundColor : "transparent", border: 0 };
+
+	document.title = '轨迹地图:' + pl + '个点';
+	marker3 = new BMap.Marker(points[0]);
+	map.addOverlay(marker3);
+	labela = new BMap.Label(0);
+    labela.setTitle(0);
+	labela.setStyle(ls);
+	marker3.setLabel(labela);
+/*
+	marker3.addEventListener("click", function(e){
+		//console.log(e);
+		var opts = {
+			width : 200,     // 信息窗口宽度
+			height: 150,     // 信息窗口高度
+			title : labela.getTitle() , // 信息窗口标题
+			enableMessage: true//设置允许信息窗发送短息
+		};
+		var point = new BMap.Point(e.point.lng, e.point.lat);
+		var infoWindow = new BMap.InfoWindow("经度：" + e.point.lng + "<br>纬度：" + e.point.lat, opts);
+		map.openInfoWindow(infoWindow, point);
+	});
+*/
+    $id('longitude').innerHTML = '经度:' + points[0].lng;
+	$id('latitude').innerHTML = '纬度:' + points[0].lat;
+	$id('time').innerHTML = '时间:' + times[0];
+	$id('pid').innerHTML = 0;
+    $id('points_delete').innerHTML = ""
+}
+
+window.onload = function() { loadGPX(filename); }
+
+//生成GPX列表(IE)
+function gpxlist(){
+	var div = document.createElement('div');
+	div.innerHTML = '<a href="./"></a>';
+	var path= div.firstChild.href;
+	div = null;
+	var fso = new ActiveXObject("Scripting.FileSystemObject");
+	filepath = path.substr(8);
+	//alert(path);
+	var f = fso.GetFolder(filepath);
+	var fc = new Enumerator(f.files);
+	var s = '<select onChange=loadLocus() id=select1>';
+	for (; !fc.atEnd(); fc.moveNext()){
+		var fp=fc.item()+'';
+		if(fp.substr(fp.length-4).toUpperCase()=='.GPX'){
+			fn = fp.substr(path.length-8);
+			s += '<option>' + fn + '</option>';
+		}
+	}
+	$id('gpxlist').innerHTML = s+'</select>';
+}
+//gpxlist();
+
+function loadLocus() { loadGPX(document.all.select1.options[document.all.select1.selectedIndex].text); }
+
+function lastp(){ 
+	if (i1 > 0) {
+		i1 = i1-1;
+		marker3.setPosition(points[i1]);
+		labela.setContent(i1);
+		$id('longitude').innerHTML = '经度:' + points[i1].lng;
+		$id('latitude').innerHTML = '纬度:' + points[i1].lat;
+		$id('time').innerHTML = '时间:' + times[i1];
+		$id('pid').innerHTML = i1;
+		delurl = 'del.php?id=' + i1;
+	}else{
+		clearInterval(itv1);
+	}
+}
+
+$id('btnb').addEventListener('click', function(){
+	clearInterval(itv1);
+	clearInterval(itv2);
+	$id('btnff').disabled = false;
+	$id('btnfb').disabled = false;
+	lastp();
+}, false);
+
+$id('btnfb').addEventListener('click', function(){
+	this.disabled = true;
+	$id('btnff').disabled = false;
+	clearInterval(itv2);
+	itv1 = setInterval("lastp()", 100);
+}, false);
+
+function nextp(){
+	if(i1 <= pl){
+		i1 = i1 + 1;
+		marker3.setPosition(points[i1]);
+		labela.setContent(i1);
+		$id('longitude').innerHTML = '经度:' + points[i1].lng;
+		$id('latitude').innerHTML = '纬度:' + points[i1].lat;
+		$id('time').innerHTML = '时间:' + times[i1];
+		$id('pid').innerHTML = i1;
+		delurl = 'del.php?id=' + i1;
+	}else{
+		clearInterval(itv2);
+	}
+}
+
+$id('btnf').addEventListener('click',function(){
+	clearInterval(itv1);
+	clearInterval(itv2);
+	$id('btnff').disabled = false;
+	$id('btnfb').disabled = false;
+	nextp(); 	
+}, false);
+
+$id('btnff').addEventListener('click',function(){
+	this.disabled = true;
+	$id('btnfb').disabled = false;
+	clearInterval(itv1);
+	itv2 = setInterval("nextp()", 100); 	
+}, false);
+
+$id('btnpause').addEventListener('click',function(){
+	clearInterval(itv1);
+	clearInterval(itv2);
+	$id('btnff').disabled = false;
+	$id('btnfb').disabled = false;
+}, false);
+
+$id('button_delete').addEventListener('click', function() {
+	var i = $id('pid').innerHTML;
+    if ($id('points_delete').innerHTML == '')
+        $id('points_delete').innerHTML = $id('pid').innerHTML;
+    else
+        $id('points_delete').innerHTML = $id('points_delete').innerHTML + ',' + $id('pid').innerHTML;
+	times.splice(i, 1);
+	points.splice(i, 1);
+	polyline.setPath(points);
+	if (i < points.length) {
+		marker3.setPosition(points[i]);
+		$id('pid').innerHTML = i;
+		$id('longitude').innerHTML = "经度：" + points[i].lng;
+		$id('latitude').innerHTML = "纬度：" + points[i].lat;
+		$id('time').innerHTML = "时间：" + times[i];
+	}
+}, false);
+
+$id('button_saveas').addEventListener('click', function() {
+    if($id('points_delete').innerHTML != ""){
+        var list = $id('points_delete').innerHTML.split(',');
+        for (i=0; i<list.length; i++) {
+            var x = trkpt[list[i]];
+            x.parentNode.removeChild(x);
+        }
+        var s = (new XMLSerializer()).serializeToString(xmlDoc);
+        var blob = new Blob([s], { 'type': 'application/xml' });
+        var url = URL.createObjectURL(blob);
+        //查看
+        //window.open(url);
+        //下载
+        var link = document.createElement('a');
+        link.download = 'm' + fp;
+        link.href = url;
+        link.click();
+    }
+}, false);
+</script>
+</body>
+</html>
