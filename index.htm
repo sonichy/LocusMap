@@ -277,9 +277,9 @@ $id('btnpause').addEventListener('click',function(){
 $id('button_delete').addEventListener('click', function() {
 	var i = $id('pid').innerHTML;
     if ($id('points_delete').innerHTML == '')
-        $id('points_delete').innerHTML = $id('pid').innerHTML;
+        $id('points_delete').innerHTML = i;
     else
-        $id('points_delete').innerHTML = $id('points_delete').innerHTML + ',' + $id('pid').innerHTML;
+        $id('points_delete').innerHTML = $id('points_delete').innerHTML + ',' + i;
 	times.splice(i, 1);
 	points.splice(i, 1);
 	polyline.setPath(points);
@@ -306,7 +306,7 @@ $id('button_saveas').addEventListener('click', function() {
         //window.open(url);
         //下载
         var link = document.createElement('a');
-        link.download = 'm' + fp;
+        link.download = 'm' + filename;
         link.href = url;
         link.click();
     }
